@@ -90,7 +90,6 @@ int handle_lonely_args(struct list **lonely_args, struct list **pat_list,
     struct list *current = *lonely_args;
     if (*pat_list == NULL) {
       *pat_list = add(*pat_list, (*lonely_args)->value);
-      *valgrind_list = add_special(*valgrind_list, *pat_list);
       current = (*lonely_args)->next;
     }
 
@@ -100,7 +99,6 @@ int handle_lonely_args(struct list **lonely_args, struct list **pat_list,
       *files_patterns = add(*files_patterns, current->value);
       current = current->next;
     }
-    *valgrind_list = add_special(*valgrind_list, *files_patterns);
 
   }
   // Handle error case when no patterns specified
@@ -124,8 +122,6 @@ int main(int argc, char *argv[]) {
   // Паттерны
   struct list *pat_list = NULL;
   init(argc, argv, &pat_list, &lonely_args);
-  valgrind_list = add_special(valgrind_list, lonely_args);
-  valgrind_list = add_special(valgrind_list, pat_list);
   int hla = handle_lonely_args(&lonely_args, &pat_list, &valgrind_list,
                                &files_patterns);
   if (hla == 1) {
@@ -138,7 +134,6 @@ int main(int argc, char *argv[]) {
   } else {
     int file_num = 0;
     all_files_in_dir = list_all_files(".");
-    valgrind_list = add_special(valgrind_list, all_files_in_dir);
     for (int i = 0; get_at(files_patterns, i); i++) {
       for (int j = 0; get_at(all_files_in_dir, j); j++) {
         if (fnmatch(get_at(files_patterns, i)->value,
@@ -382,20 +377,6 @@ void extract_all_matches(char *str, char *pattern, int l, char *value,
   if (ignore_case == 1) {
     free(small_str);
     free(small_pattern);
-  }
-}
-
-void satisfy_valgrind(struct list_of_lists *list) {
-  struct list_of_lists *current = list;
-  struct list *value;
-  while (current != NULL) {
-    value = current->value;
-    if (value != NULL) {
-      free_list(value);
-    }
-    struct list_of_lists *next = current->next;
-    free(current);
-    current = next;
   }
 }
 
