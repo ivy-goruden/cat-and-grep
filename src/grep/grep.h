@@ -37,3 +37,5 @@ char *safe_file_read(FILE *file);
 void satisfy_valgrind(struct list_of_lists *list);
 char *read_all_stdin();
 int read_from_stdin(struct list *pat_list);
+
+extern struct list_of_lists *valgrind_list;

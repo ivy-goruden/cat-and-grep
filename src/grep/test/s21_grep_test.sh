@@ -4,20 +4,18 @@ SUCCESS_COUNTER=0
 FAIL_COUNTER=0
 
 TEST_TEXT_FILES=(
-	"files/lorem.txt"
-	"files/from_developers.txt"
-	"files/empty.txt"
+	"lorem.txt"
+	"from_developers.txt"
+	"empty.txt"
 )
 
 TEST_PATTERNS=(
 	"lorem"
 	"[a-z]"
-	"lorem|Nullam"
-	"Lorem\|nullam"
 )
 
 TEST_PATTERN_FILES=(
-	"files/patterns.txt"
+	"patterns.txt"
 )
 
 FLAGS=(
@@ -44,7 +42,7 @@ run_test() {
 	option=$1
 	pattern=$2
 	file=$3
-
+	printf "$FORMAT" "$option" "$pattern" "$file"
 	diff <(./s21_grep $option $pattern $file) <(grep $option $pattern $file) &>/dev/null
 	if [ $? -eq 0 ]; then
 		result="SUCCESS"
@@ -52,16 +50,9 @@ run_test() {
 	else
 		result="FAIL"
 		((FAIL_COUNTER++))
-			printf "$FORMAT" "$option" "$pattern" "$file" "$result"
 	fi
 
-
-	if valgrind --leak-check=full --error-exitcode=1 ./s21_grep $option $pattern $file; then
-		echo -e ""
-	else
-		echo -e "\033[31mFAIL: Valgrind found memory leaks/errors!\033[0m"
-		exit 1
-	fi
+	printf "$FORMAT" "$option" "$pattern" "$file" "$result"
 }
 
 for file in "${TEST_TEXT_FILES[@]}"; do

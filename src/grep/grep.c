@@ -10,7 +10,7 @@ int number_lines = 0;          // -n
 int hide_file_names = 0;       // -h
 int surpess_errors = 0;        // -s
 int output_matching_part = 0;  //-o
-int FILE_MAX = 100;
+int FILE_MAX = 10000;
 int print_only_files = 0;
 
 void init(int argc, char *argv[], struct list **pat_list,
@@ -82,8 +82,63 @@ void init(int argc, char *argv[], struct list **pat_list,
   *pat_list = files_to_pattern(*pat_list, file_list_f);
 }
 
+int compare_strlen_desc(const void *a, const void *b) {
+  const char *str_a = *(const char **)a;
+  const char *str_b = *(const char **)b;
+  size_t len_a = strlen(str_a);
+  size_t len_b = strlen(str_b);
+  if (len_a > len_b) return -1;  // Longer strings first
+  if (len_a < len_b) return 1;
+  return 0;
+}
+
+int is_substring(const char *pattern, struct list *list) {
+  struct list *current = list;
+  while (current != NULL) {
+    if (strstr(current->value, pattern) != NULL) {
+      return 1;
+    }
+    current = current->next;
+  }
+  return 0;
+}
+
+struct list *remove_substring_patterns(struct list *patterns) {
+  struct list *result = NULL;
+  struct list *current = patterns;
+
+  // Проверка избыточных паттернов через fnmatch()
+  current = patterns;
+  while (current != NULL) {
+    const char *B = current->value;
+    int is_redundant = 0;
+
+    struct list *other = patterns;
+    while (other != NULL) {
+      if (other == current) {
+        other = other->next;
+        continue;
+      }
+      const char *A = other->value;
+      // Проверяем, покрывается ли B паттерном A
+      if (fnmatch(A, B, FNM_PATHNAME) == 0) {
+        is_redundant = 1;
+        break;
+      }
+      other = other->next;
+    }
+
+    if (!is_redundant) {
+      result = add(result, strdup(B));
+    }
+
+    current = current->next;
+  }
+
+  return result;
+}
+
 int handle_lonely_args(struct list **lonely_args, struct list **pat_list,
-                       struct list_of_lists **valgrind_list,
                        struct list **files_patterns) {
   if (*lonely_args != NULL && (*lonely_args)->value != NULL) {
     // Add first lonely_arg to pat_list if pat_list is empty
@@ -105,7 +160,7 @@ int handle_lonely_args(struct list **lonely_args, struct list **pat_list,
   else if (*lonely_args == NULL &&
            (*pat_list == NULL || (*pat_list)->value == NULL)) {
     printf("%s", "Error: No patterns specified\n");
-    satisfy_valgrind(*valgrind_list);
+    satisfy_valgrind(valgrind_list);
     return 1;
   }
   return 0;
@@ -115,15 +170,14 @@ int main(int argc, char *argv[]) {
   // Файлы, которые проверяются на паттерны
   struct list *files_patterns = NULL;
   struct list *files = NULL;
-  // Valgrind list for freeing all structures in one place
-  struct list_of_lists *valgrind_list = NULL;
+
   // Одинокие аргументы. Могут быть и файлами и паттернами
   struct list *lonely_args = NULL;
   // Паттерны
   struct list *pat_list = NULL;
   init(argc, argv, &pat_list, &lonely_args);
-  int hla = handle_lonely_args(&lonely_args, &pat_list, &valgrind_list,
-                               &files_patterns);
+  int hla = handle_lonely_args(&lonely_args, &pat_list, &files_patterns);
+  pat_list = remove_substring_patterns(pat_list);
   if (hla == 1) {
     return 1;
   }
@@ -168,14 +222,17 @@ struct list *files_to_pattern(struct list *patterns, struct list *files) {
       if (surpess_errors == 0) {
         printf("Не удалось открыть файл %s\n", get_at(files, i)->value);
       }
-      return NULL;
+      fclose(file);
+      continue;
     }
     char *file_str = safe_file_read(file);
     while (file_str != NULL) {
       file_str[strcspn(file_str, "\n")] = '\0';
       patterns = add(patterns, file_str);
+      free(file_str);
       file_str = safe_file_read(file);
     }
+    fclose(file);
     free(file_str);
   }
   return patterns;
@@ -183,6 +240,7 @@ struct list *files_to_pattern(struct list *patterns, struct list *files) {
 
 void highlight_in_red(const char *line, const char *pattern) {
   const char *match = strstr(line, pattern);
+  size_t len = strlen(line);
   if (match) {
     // Print part before the match
     printf("%.*s", (int)(match - line), line);
@@ -192,6 +250,9 @@ void highlight_in_red(const char *line, const char *pattern) {
     printf("%s", match + strlen(pattern));
   } else {
     printf("%s", line);
+  }
+  if (len > 0 && line[len - 1] != '\n') {
+    printf("\n");
   }
 }
 
@@ -238,7 +299,7 @@ int check_pattern(int *found, int *number_of_lines, char *file_string,
 }
 
 int if_invert(int found, int *number_of_lines, char *value, int l,
-              char *file_str) {
+              char *file_str, int file_num) {
   if (found == 0 && invert_match == 1) {
     (*number_of_lines)++;
     if (!output_matching_part) {
@@ -247,13 +308,16 @@ int if_invert(int found, int *number_of_lines, char *value, int l,
         return 1;
 
       } else if (number_of_lines_only == 0) {
-        if (hide_file_names == 0) {
+        if (hide_file_names == 0 && file_num > 1) {
           printf("%s:", value);
         }
         if (number_lines == 1) {
           printf("%d:", l + 1);
         }
         printf("%s", file_str);
+        if (file_str[strlen(file_str) - 1] != '\n') {
+          printf("\n");
+        }
       }
     }
   }
@@ -294,7 +358,7 @@ int grep(FILE *file, char *value, struct list *patterns, int file_num) {
         break;
       }
     }
-    int a = if_invert(found, &number_of_lines, value, l, file_str);
+    int a = if_invert(found, &number_of_lines, value, l, file_str, file_num);
     if (a == 1) {
       break;
     }
@@ -322,15 +386,10 @@ char *to_lower(char *string) {
 
 void free_list(struct list *list) {
   struct list *current = list;
-  struct list *next;
-  while (current != NULL) {
-    next = current->next;
-    if (current->value != NULL) {
-      free(current->value);
-    }
-    free(current);
-    current = next;
+  if (current->value != NULL) {
+    free(current->value);
   }
+  free(current);
 }
 
 void print_list(struct list *list) {

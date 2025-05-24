@@ -1,22 +1,24 @@
 #include "grep.h"
 
+// Valgrind list for freeing all structures in one place
+struct list_of_lists *valgrind_list = NULL;
 struct list_of_lists *add_special(struct list_of_lists *list,
                                   struct list *value) {
-  struct list_of_lists *new_pattern = malloc(sizeof(struct list_of_lists));
+  struct list_of_lists *new_node = malloc(sizeof(struct list_of_lists));
+  if (!new_node) return list;  // Handle malloc failure
 
-  new_pattern->value = value;
-  new_pattern->next = NULL;
+  new_node->value = value;
+  new_node->next = NULL;
+
   if (list == NULL) {
-    list = new_pattern;
-  } else if (list->value == NULL) {
-    list->value = value;
-    list->next = NULL;
+    list = new_node;  // List was empty; new_node becomes head
   } else {
+    // Find last node and append new_node
     struct list_of_lists *current = list;
     while (current->next != NULL) {
       current = current->next;
     }
-    current->next = new_pattern;
+    current->next = new_node;
   }
   return list;
 }
@@ -44,6 +46,7 @@ struct list *add(struct list *list, char *value) {
     current->next = new_pattern;
     new_pattern->index = index + 1;
   }
+  valgrind_list = add_special(valgrind_list, new_pattern);
   return list;
 }
 
