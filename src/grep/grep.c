@@ -217,12 +217,10 @@ int main(int argc, char *argv[]) {
 struct list *files_to_pattern(struct list *patterns, struct list *files) {
   for (int i = 0; get_at(files, i); i++) {
     FILE *file = fopen(get_at(files, i)->value, "r");
-
     if (file == NULL) {
       if (surpess_errors == 0) {
         printf("Не удалось открыть файл %s\n", get_at(files, i)->value);
       }
-      fclose(file);
       continue;
     }
     char *file_str = safe_file_read(file);
@@ -256,11 +254,13 @@ void highlight_in_red(const char *line, const char *pattern) {
   }
 }
 
-int check_pattern(int *found, int *number_of_lines, char *file_string,
+int check_pattern(int *found, char *file_string,
                   char *value, char *file_str, char *pattern, int l,
                   int file_num) {
   regex_t reegex;
-  if (regcomp(&reegex, pattern, REG_EXTENDED) != 0) {
+  int flags = REG_EXTENDED;
+  if (ignore_case) flags |= REG_ICASE;
+  if (regcomp(&reegex, pattern, flags) != 0) {
     if (surpess_errors == 0) {
       printf("Не удалось скомпилировать регулярное выражение\n");
     }
@@ -275,7 +275,6 @@ int check_pattern(int *found, int *number_of_lines, char *file_string,
         regfree(&reegex);
         return 1;
       }
-      (*number_of_lines)++;
       if (number_of_lines_only == 0) {
         if (output_matching_part == 0) {
           if (hide_file_names == 0 && file_num > 1) {
@@ -321,6 +320,9 @@ int if_invert(int found, int *number_of_lines, char *value, int l,
       }
     }
   }
+  else if(found>0 && invert_match ==0){
+    (*number_of_lines)++;
+  }
   return 0;
 }
 
@@ -342,16 +344,8 @@ int grep(FILE *file, char *value, struct list *patterns, int file_num) {
     for (int p = 0; get_at(patterns, p); p++) {
       char *file_string = file_str;
       char *pattern = get_at(patterns, p)->value;
-      if (ignore_case == 1) {
-        file_string = to_lower(file_string);
-        pattern = to_lower(pattern);
-      }
-      int check = check_pattern(&found, &number_of_lines, file_string, value,
+      int check = check_pattern(&found, file_string, value,
                                 file_str, pattern, l, file_num);
-      if (ignore_case == 1) {
-        free(file_string);
-        free(pattern);
-      }
       if (check == 1) {
         return 0;
       } else if (check == 2) {
