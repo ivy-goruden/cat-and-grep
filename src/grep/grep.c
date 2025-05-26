@@ -82,45 +82,43 @@ void init(int argc, char *argv[], struct list **pat_list,
   *pat_list = files_to_pattern(*pat_list, file_list_f);
 }
 
-int compare_strlen_desc(const void *a, const void *b) {
-  const char *str_a = *(const char **)a;
-  const char *str_b = *(const char **)b;
-  size_t len_a = strlen(str_a);
-  size_t len_b = strlen(str_b);
-  if (len_a > len_b) return -1;  // Longer strings first
-  if (len_a < len_b) return 1;
-  return 0;
-}
-
-int is_substring(const char *pattern, struct list *list) {
-  struct list *current = list;
-  while (current != NULL) {
-    if (strstr(current->value, pattern) != NULL) {
+int is_in_list(struct list *list, const char *value) {
+  while (list != NULL) {
+    if (strcmp(list->value, value) == 0) {
       return 1;
     }
-    current = current->next;
+    list = list->next;
   }
   return 0;
 }
 
 struct list *remove_substring_patterns(struct list *patterns) {
-  struct list *result = NULL;
+  // Step 1: Deduplicate the list
+  struct list *unique_patterns = NULL;
   struct list *current = patterns;
+  while (current != NULL) {
+    if (!is_in_list(unique_patterns, current->value)) {
+      unique_patterns = add(unique_patterns, strdup(current->value));
+    }
+    current = current->next;
+  }
 
-  // Проверка избыточных паттернов через fnmatch()
-  current = patterns;
+  // Step 2: Remove patterns subsumed by others
+  struct list *result = NULL;
+  current = unique_patterns;
   while (current != NULL) {
     const char *B = current->value;
     int is_redundant = 0;
 
-    struct list *other = patterns;
+    struct list *other = unique_patterns;
     while (other != NULL) {
       if (other == current) {
         other = other->next;
         continue;
       }
       const char *A = other->value;
-      // Проверяем, покрывается ли B паттерном A
+
+      // Check if A covers B (e.g., A = "a.*", B = "abc")
       if (fnmatch(A, B, FNM_PATHNAME) == 0) {
         is_redundant = 1;
         break;
@@ -131,10 +129,11 @@ struct list *remove_substring_patterns(struct list *patterns) {
     if (!is_redundant) {
       result = add(result, strdup(B));
     }
-
     current = current->next;
   }
 
+  // Free the temporary deduplicated list
+  free_list(unique_patterns);
   return result;
 }
 
