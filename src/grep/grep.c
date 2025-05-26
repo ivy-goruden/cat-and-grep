@@ -254,9 +254,8 @@ void highlight_in_red(const char *line, const char *pattern) {
   }
 }
 
-int check_pattern(int *found, char *file_string,
-                  char *value, char *file_str, char *pattern, int l,
-                  int file_num) {
+int check_pattern(int *found, char *file_string, char *value, char *file_str,
+                  char *pattern, int l, int file_num) {
   regex_t reegex;
   int flags = REG_EXTENDED;
   if (ignore_case) flags |= REG_ICASE;
@@ -319,8 +318,7 @@ int if_invert(int found, int *number_of_lines, char *value, int l,
         }
       }
     }
-  }
-  else if(found>0 && invert_match ==0){
+  } else if (found > 0 && invert_match == 0) {
     (*number_of_lines)++;
   }
   return 0;
@@ -344,8 +342,8 @@ int grep(FILE *file, char *value, struct list *patterns, int file_num) {
     for (int p = 0; get_at(patterns, p); p++) {
       char *file_string = file_str;
       char *pattern = get_at(patterns, p)->value;
-      int check = check_pattern(&found, file_string, value,
-                                file_str, pattern, l, file_num);
+      int check = check_pattern(&found, file_string, value, file_str, pattern,
+                                l, file_num);
       if (check == 1) {
         return 0;
       } else if (check == 2) {

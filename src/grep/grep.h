@@ -31,7 +31,8 @@ void highlight_in_red(const char *line, const char *pattern);
 int grep(FILE *file, char *value, struct list *patterns, int);
 void free_list(struct list *list);
 void print_list(struct list *list);
-void extract_all_matches(char *str, char *pattern, int l, char *value, int);
+void extract_all_matches(char *str, char *pattern, int l, char *value,
+                         int file_num);
 char *safe_read();
 char *safe_file_read(FILE *file);
 void satisfy_valgrind(struct list_of_lists *list);
