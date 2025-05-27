@@ -91,6 +91,17 @@ int is_in_list(struct list *list, const char *value) {
   }
   return 0;
 }
+void free_list_real(struct list *head) {
+  struct list *current = head;
+  struct list *next;
+  while (current != NULL) {
+    next = current->next;  // Получаем next перед освобождением current
+    free(current->value);  // Освобождаем данные
+    free(current);         // Освобождаем сам узел
+    current = next;        // Переходим к следующему узлу
+  }
+  head = NULL;  // Обнуляем голову списка
+}
 
 struct list *remove_substring_patterns(struct list *patterns) {
   // Step 1: Deduplicate the list
@@ -133,7 +144,8 @@ struct list *remove_substring_patterns(struct list *patterns) {
   }
 
   // Free the temporary deduplicated list
-  free_list(unique_patterns);
+
+  free_list_real(unique_patterns);
   return result;
 }
 
@@ -465,27 +477,28 @@ char *safe_read() {
 }
 
 char *safe_file_read(FILE *file) {
-  char *string = calloc(FILE_MAX, 1);
-  char *input = calloc(FILE_MAX, 1);
-  if (!string || !input) {
-    free(string);
-    free(input);
-    return NULL;
+  char *buffer = NULL;
+  size_t capacity = 0;
+  size_t len = 0;
+  char chunk[4096];
+
+  while (fgets(chunk, sizeof(chunk), file)) {
+    size_t chunk_len = strlen(chunk);
+    if (len + chunk_len + 1 > capacity) {
+      capacity = (len + chunk_len) * 2 + 1;
+      char *new_buf = realloc(buffer, capacity);
+      if (!new_buf) {
+        free(buffer);
+        return NULL;
+      }
+      buffer = new_buf;
+    }
+    memcpy(buffer + len, chunk, chunk_len);
+    len += chunk_len;
   }
 
-  int len = 0;
-  while (fgets(input, FILE_MAX, file) != NULL) {
-    strcat(string, input);
-    len += strlen(input);
-    if (strchr(input, '\0')) break;
-  }
-
-  free(input);
-  if (len == 0) {
-    free(string);
-    return NULL;
-  }
-  return string;
+  if (buffer) buffer[len] = '\0';
+  return buffer;
 }
 char *read_all_stdin() {
   size_t size = 1024;
