@@ -23,13 +23,20 @@ struct list_of_lists *add_special(struct list_of_lists *list,
   return list;
 }
 
+char *strdup1(const char *s) {
+  size_t len = strlen(s) + 1;
+  char *dup = malloc(len);
+  if (dup) memcpy(dup, s, len);
+  return dup;
+}
+
 struct list *add(struct list *list, char *value) {
   struct list *new_pattern = malloc(sizeof(struct list));
 
   if (!new_pattern) {
     return list;
   }
-  new_pattern->value = strdup(value);
+  new_pattern->value = strdup1(value);
   new_pattern->next = NULL;
   new_pattern->index = 0;
   if (list == NULL) {

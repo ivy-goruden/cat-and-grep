@@ -91,34 +91,20 @@ int is_in_list(struct list *list, const char *value) {
   }
   return 0;
 }
-void free_list_real(struct list *head) {
-  struct list *current = head;
-  struct list *next;
-  while (current != NULL) {
-    next = current->next;  // Получаем next перед освобождением current
-    free(current->value);  // Освобождаем данные
-    free(current);         // Освобождаем сам узел
-    current = next;        // Переходим к следующему узлу
-  }
-  head = NULL;  // Обнуляем голову списка
-}
 
 struct list *remove_substring_patterns(struct list *patterns) {
-  // Step 1: Deduplicate the list
   struct list *unique_patterns = NULL;
   struct list *current = patterns;
   while (current != NULL) {
     if (!is_in_list(unique_patterns, current->value)) {
-      unique_patterns = add(unique_patterns, strdup(current->value));
+      unique_patterns = add(unique_patterns, current->value);
     }
     current = current->next;
   }
-
-  // Step 2: Remove patterns subsumed by others
   struct list *result = NULL;
   current = unique_patterns;
   while (current != NULL) {
-    const char *B = current->value;
+    char *B = current->value;
     int is_redundant = 0;
 
     struct list *other = unique_patterns;
@@ -138,14 +124,10 @@ struct list *remove_substring_patterns(struct list *patterns) {
     }
 
     if (!is_redundant) {
-      result = add(result, strdup(B));
+      result = add(result, B);
     }
     current = current->next;
   }
-
-  // Free the temporary deduplicated list
-
-  free_list_real(unique_patterns);
   return result;
 }
 
@@ -193,7 +175,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   if (files_patterns == NULL) {
-    read_from_stdin(pat_list);
+    // read_from_stdin(pat_list);
     satisfy_valgrind(valgrind_list);
     return 0;
   } else {
@@ -210,7 +192,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (files == NULL) {
-      read_from_stdin(pat_list);
+      // read_from_stdin(pat_list);
       satisfy_valgrind(valgrind_list);
       return 0;
     } else {
@@ -265,8 +247,8 @@ void highlight_in_red(const char *line, const char *pattern) {
   }
 }
 
-int check_pattern(int *found, char *file_string, char *value, char *file_str,
-                  char *pattern, int l, int file_num) {
+int check_pattern(int *found, char *value, char *file_str, char *pattern, int l,
+                  int file_num) {
   regex_t reegex;
   int flags = REG_EXTENDED;
   if (ignore_case) flags |= REG_ICASE;
@@ -277,7 +259,7 @@ int check_pattern(int *found, char *file_string, char *value, char *file_str,
     return 1;
   }
   int final_break = 0;
-  if (regexec(&reegex, file_string, 0, NULL, 0) == 0) {
+  if (regexec(&reegex, file_str, 0, NULL, 0) == 0) {
     *found = 1;
     if (invert_match == 0) {
       if (print_only_files == 1) {
@@ -346,16 +328,14 @@ int grep(FILE *file, char *value, struct list *patterns, int file_num) {
   for (int l = 0;; l++) {
     char *file_str = safe_file_read(file);
     if (file_str == NULL) {
-      free(file_str);
       break;
     }
     int found = 0;
     for (int p = 0; get_at(patterns, p); p++) {
-      char *file_string = file_str;
       char *pattern = get_at(patterns, p)->value;
-      int check = check_pattern(&found, file_string, value, file_str, pattern,
-                                l, file_num);
+      int check = check_pattern(&found, value, file_str, pattern, l, file_num);
       if (check == 1) {
+        free(file_str);
         return 0;
       } else if (check == 2) {
         break;
@@ -477,15 +457,24 @@ char *safe_read() {
 }
 
 char *safe_file_read(FILE *file) {
+  if (file == NULL) return NULL;
+
   char *buffer = NULL;
   size_t capacity = 0;
   size_t len = 0;
-  char chunk[4096];
 
-  while (fgets(chunk, sizeof(chunk), file)) {
-    size_t chunk_len = strlen(chunk);
-    if (len + chunk_len + 1 > capacity) {
-      capacity = (len + chunk_len) * 2 + 1;
+  int ch;
+  while ((ch = fgetc(file))) {
+    if (ch == EOF) {
+      if (len == 0) {
+        return NULL;
+      }
+      break;
+    }
+
+    // Grow buffer if needed
+    if (len + 1 >= capacity) {
+      capacity = (capacity == 0) ? 128 : capacity * 2;
       char *new_buf = realloc(buffer, capacity);
       if (!new_buf) {
         free(buffer);
@@ -493,11 +482,20 @@ char *safe_file_read(FILE *file) {
       }
       buffer = new_buf;
     }
-    memcpy(buffer + len, chunk, chunk_len);
-    len += chunk_len;
+
+    // Store character
+    buffer[len++] = (char)ch;
+
+    // Break on newline
+    if (ch == '\n') {
+      break;
+    }
   }
 
-  if (buffer) buffer[len] = '\0';
+  // Null-terminate the string
+  if (buffer) {
+    buffer[len] = '\0';
+  }
   return buffer;
 }
 char *read_all_stdin() {
@@ -532,48 +530,4 @@ char *read_all_stdin() {
 
   buffer[len] = '\0';
   return buffer;
-}
-
-int read_from_stdin(struct list *pat_list) {
-  printf("Не удалось найти файлы, соответствующие паттернам\n");
-  printf("Идёт считывание с ввода. Для завершения введите 'q'\n");
-  while (1) {
-    int ch = getchar();
-    char *new = malloc(sizeof(char) * 2);
-    if (!new) {
-      return 1;
-    }
-    new[0] = (char)ch;
-    new[1] = '\0';
-    char *string = read_all_stdin();
-    if (string != NULL) {
-      char *result = malloc(2 + strlen(string) + 1);
-      if (!result) {
-        free(string);
-        free(new);
-        return 1;
-      }
-      strcpy(result, new);
-      strcat(result, string);
-      if (result[0] == 'q' && result[1] == '\0') {
-        free(string);
-        free(result);
-        free(new);
-        return 1;
-      }
-      FILE *fake_file = fmemopen(result, strlen(result) + 1, "r");
-      if (!fake_file) {
-        free(new);
-        free(string);
-        free(result);
-        return 1;
-      }
-      grep(fake_file, "", pat_list, 0);
-      fclose(fake_file);
-      free(string);
-      free(result);
-    }
-    free(new);
-  }
-  return 0;
 }

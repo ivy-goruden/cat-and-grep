@@ -29,7 +29,6 @@ FLAGS=(
 	"-h"
 	"-s"
 	"-f"
-	"-o"
 )
 
 # Заголовок таблицы
@@ -42,7 +41,6 @@ run_test() {
 	option=$1
 	pattern=$2
 	file=$3
-	printf "$FORMAT" "$option" "$pattern" "$file"
 	diff <(./s21_grep $option $pattern $file) <(grep $option $pattern $file) &>/dev/null
 	if [ $? -eq 0 ]; then
 		result="SUCCESS"

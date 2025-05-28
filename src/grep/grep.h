@@ -40,3 +40,4 @@ char *read_all_stdin();
 int read_from_stdin(struct list *pat_list);
 
 extern struct list_of_lists *valgrind_list;
+char *strdup(const char *s);
